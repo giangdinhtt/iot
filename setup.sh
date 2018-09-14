@@ -2,11 +2,9 @@ sudo apt-get update
 sudo apt-get upgrade
 sudo apt-get install git
 git clone https://github.com/giangdinhtt/iot.git
-wget https://nodejs.org/dist/v8.12.0/node-v8.12.0-linux-armv7l.tar.xz
-tar -xvf node-v8.12.0-linux-armv7l.tar.xz
-cd node-v8.12.0-linux-armv7l/
-sudo cp -R * /usr/local/
-sudo npm install -g --unsafe-perm node-red
+# install node-red and depedencies
+bash <(curl -sL https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/update-nodejs-and-nodered)
+sudo systemctl enable nodered.service
 cd ~/.node-red/
 npm install node-red-node-arduino
 sudo apt-get install python-pip python-virtualenv
