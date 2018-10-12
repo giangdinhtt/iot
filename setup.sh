@@ -7,6 +7,8 @@ bash <(curl -sL https://raw.githubusercontent.com/node-red/raspbian-deb-package/
 sudo systemctl enable nodered.service
 cd ~/.node-red/
 npm install node-red-node-arduino
+npm install node-red-contrib-gpio
+npm install node-red-dashboard
 sudo apt-get install python-pip python-virtualenv
 sudo python -m pip install --upgrade pip setuptools wheel
 sudo pip install Adafruit_DHT
