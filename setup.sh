@@ -1,15 +1,21 @@
-sudo apt-get update
-sudo apt-get upgrade
-sudo apt-get install git
-git clone https://github.com/giangdinhtt/iot.git
+#!/bin/bash
+#apt-get install git
+#git clone https://github.com/giangdinhtt/iot.git
+apt-get update
+apt-get upgrade
+
 # install node-red and depedencies
-bash <(curl -sL https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/update-nodejs-and-nodered)
+eval "bash <(curl -sL https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/update-nodejs-and-nodered)"
+npm install -g npm
 sudo systemctl enable nodered.service
 cd ~/.node-red/
-npm install node-red-node-arduino
-npm install node-red-contrib-gpio
-npm install node-red-dashboard
-sudo apt-get install python-pip python-virtualenv
-sudo python -m pip install --upgrade pip setuptools wheel
-sudo pip install Adafruit_DHT
+npm install -g node-red-node-arduino --unsafe-perm
+npm install -g node-red-contrib-gpio --unsafe-perm
+npm install -g node-red-dashboard --unsafe-perm
+npm install -g node-red-contrib-msg-queue --unsafe-perm
+apt-get install python-pip python-virtualenv
+python -m pip install --upgrade pip setuptools wheel
+pip install Adafruit_DHT
 
+# Start node-red
+node-red-start
