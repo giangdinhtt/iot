@@ -13,9 +13,13 @@ LiquidCrystal_I2C lcd(0x3f,16,2);  // set the LCD address to 0x3f for a 16 chars
 /*
  * DHT sensor
  */
-const int DHTPIN = 2;       //Đọc dữ liệu từ DHT11 ở chân 2 trên mạch Arduino
-const int DHTTYPE = DHT11;  //Khai báo loại cảm biến, có 2 loại là DHT11 và DHT22
-DHT dht(DHTPIN, DHTTYPE);
+const int DHT11_PIN = 2;       //Đọc dữ liệu từ DHT11 ở chân 2 trên mạch Arduino
+const int DHT11_TYPE = DHT11;  //Khai báo loại cảm biến:DHT11, DHT21 or AM2301, DHT22, 
+DHT controllerSensor(DHT11_PIN, DHT11_TYPE);
+
+const int DHT21_PIN = 4;       //Đọc dữ liệu từ DHT11 ở chân 2 trên mạch Arduino
+const int DHT21_TYPE = DHT21;
+DHT environmentSensor(DHT21_PIN, DHT21_TYPE);
 
 /*
  * DS18b20 sensor
@@ -24,13 +28,13 @@ DHT dht(DHTPIN, DHTTYPE);
 #define ONE_WIRE_BUS 7
 //Thiết đặt thư viện onewire
 OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature oneWireSensor(&oneWire);
+DallasTemperature waterSensor(&oneWire);
 
 /*
  * Ultrasonic sensor
  */
-const int trig = 12;     // chân trig của HC-SR04
-const int echo = 13;     // chân echo của HC-SR04
+const int TRIG_PIN = 12;     // chân trig của HC-SR04
+const int ECHO_PIN = 13;     // chân echo của HC-SR04
 unsigned long duration; // biến đo thời gian
 int distance;           // biến lưu khoảng cách
 char distanceChar[8];
@@ -41,58 +45,135 @@ char distanceChar[8];
 StaticJsonBuffer<200> jsonBuffer;
 JsonObject& root = jsonBuffer.createObject();
 
+String float2String(float f)
+{
+  char buffer[6];
+  dtostrf(f, 2, 1, buffer);
+  return String(buffer);
+}
+
 void initLCD()
 {
   lcd.init();       // initialize the lcd 
   lcd.backlight();
 }
 
-void initDHT(void)
+void initControllerSensor(void)
 {
-  dht.begin();         // Khởi động cảm biến
+  controllerSensor.begin();         // Khởi động cảm biến
 }
 
-void initDS12B20(void)
+void initEnvironmentSensor(void)
 {
-  oneWireSensor.begin();
+  environmentSensor.begin();         // Khởi động cảm biến
 }
 
-void initUltrasonicSensor()
+void initWaterTemperatureSensor(void)
 {
-  pinMode(trig,OUTPUT);   // chân trig sẽ phát tín hiệu
-  pinMode(echo,INPUT);    // chân echo sẽ nhận tín hiệu
+  waterSensor.begin();
 }
 
-float readDS18B20Temperature()
+void initWaterTankLevel()
 {
-  oneWireSensor.requestTemperatures();
-  return oneWireSensor.getTempCByIndex(0);
+  pinMode(TRIG_PIN, OUTPUT);   // chân trig sẽ phát tín hiệu
+  pinMode(ECHO_PIN, INPUT);    // chân echo sẽ nhận tín hiệu
 }
 
-float readDHTTemperature()
+//DS18b20 sensor
+float readWaterTemperature()
 {
-  return dht.readTemperature();
+  waterSensor.requestTemperatures();
+  float v = waterSensor.getTempCByIndex(0);
+
+  char buffer[4];
+  dtostrf(v, 2, 1, buffer);
+  sprintf(buffer,"%s", buffer);
+  lcd.setCursor(0, 1);
+  lcd.print("wa:");
+  lcd.print(buffer);
+  
+  return v;
 }
 
-float readDHTHumidity()
+//DHT11
+float readControllerTemperature()
 {
-  return dht.readHumidity();
+  float v = controllerSensor.readTemperature();
+
+  char buffer[4];
+  dtostrf(v, 2, 1, buffer);
+  sprintf(buffer, "%s", buffer);
+  lcd.setCursor(0, 0);
+  lcd.print("ct:");
+  lcd.print(buffer);
+  
+  return v;
+}
+
+//DHT11
+float readControllerHumidity()
+{
+  float v = controllerSensor.readHumidity();
+
+  //char buffer[4];
+  //dtostrf(v, 1, 1, buffer);
+  //sprintf(buffer, "%s", buffer);
+  //lcd.setCursor(4, 0);
+  //lcd.print(buffer);
+
+  return v;
+}
+
+//DHT21
+float readEnvironmentTemperature()
+{
+  float v = environmentSensor.readTemperature();
+
+  char buffer[4];
+  dtostrf(v, 2, 1, buffer);
+  sprintf(buffer, "%s", buffer);
+  lcd.setCursor(8, 0);
+  lcd.print("en:");
+  lcd.print(buffer);
+
+  return v;
+}
+
+//DHT21
+float readEnvironmentHumidity()
+{
+  float v = environmentSensor.readHumidity();
+
+  //char buffer[4];
+  //dtostrf(v, 1, 1, buffer);
+  //sprintf(buffer, "%s", buffer);
+  //lcd.setCursor(12, 0);
+  //lcd.print(buffer);
+
+  return v;
 }
 
 int readDistance()
 {
   /* Phát xung từ chân trig */
-  digitalWrite(trig, LOW);  // tắt chân trig
+  digitalWrite(TRIG_PIN, LOW);  // tắt chân trig
   delayMicroseconds(5);
-  digitalWrite(trig, HIGH); // phát xung từ chân trig
+  digitalWrite(TRIG_PIN, HIGH); // phát xung từ chân trig
   delayMicroseconds(10);    // xung có độ dài 5 microSeconds
-  digitalWrite(trig, LOW);  // tắt chân trig
+  digitalWrite(TRIG_PIN, LOW);  // tắt chân trig
   
   /* Tính toán thời gian */
   // Đo độ rộng xung HIGH ở chân echo. 
-  duration = pulseIn(echo, HIGH);  
+  duration = pulseIn(ECHO_PIN, HIGH);  
   // Tính khoảng cách đến vật
-  return int(duration*0.343/2);  // in mm
+  int v = int(duration*0.343/2);  // in mm
+
+  char buffer [8];
+  sprintf(buffer, "%3d mm", v);
+  lcd.setCursor(8, 1);
+  lcd.print(buffer);
+
+  return v;
 }
 
 void executeCommands()
@@ -110,25 +191,29 @@ void executeCommands()
 
 void setup() {
   Serial.begin(9600);
-  initDHT();
-  initDS12B20();
-  initUltrasonicSensor();
+  initControllerSensor();
+  initEnvironmentSensor();
+  initWaterTemperatureSensor();
+  initWaterTankLevel();
   initLCD();
 }
 
 void loop() {
-  root["DS12B20.temp"] = readDS18B20Temperature();
-  root["DHT.temp"] = readDHTTemperature();
-  root["DHT.humid"] = readDHTHumidity();
+  root["water.temp"] = readWaterTemperature();
+  root["ctrl.temp"] = readControllerTemperature();
+  root["ctrl.humid"] = readControllerHumidity();
+  root["env.temp"] = readEnvironmentTemperature();
+  root["env.humid"] = readEnvironmentHumidity();
   root["water.level"] = readDistance();
   root.printTo(Serial);
+  //Serial.print('\n');
 
-  char buffer [50];
-  sprintf(buffer, "%3d mm", readDistance());
-  lcd.setCursor(0, 1);
-  lcd.print(buffer);
+  //char buffer [50];
+  //sprintf(buffer, "%3d mm", readDistance());
+  //lcd.setCursor(0, 1);
+  //lcd.print(buffer);
 
-  executeCommands();
+  //executeCommands();
 
   delay(500);
 }
