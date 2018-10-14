@@ -206,7 +206,7 @@ void loop() {
   root["env.humid"] = readEnvironmentHumidity();
   root["water.level"] = readDistance();
   root.printTo(Serial);
-  //Serial.print('\n');
+  Serial.print('\n');
 
   //char buffer [50];
   //sprintf(buffer, "%3d mm", readDistance());
