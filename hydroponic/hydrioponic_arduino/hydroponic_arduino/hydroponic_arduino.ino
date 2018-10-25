@@ -7,25 +7,20 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
+#include "Nano.h"
 
-LiquidCrystal_I2C lcd(0x3f,16,2);  // set the LCD address to 0x3f for a 16 chars and 2 line display
+LiquidCrystal_I2C lcd(LCD_ADDRESS, 16, 2);  // set the LCD address to 0x3f for a 16 chars and 2 line display
 
 /*
  * DHT sensor
  */
-const int DHT11_PIN = 2;       //Đọc dữ liệu từ DHT11 ở chân 2 trên mạch Arduino
-const int DHT11_TYPE = DHT11;  //Khai báo loại cảm biến:DHT11, DHT21 or AM2301, DHT22, 
 DHT controllerSensor(DHT11_PIN, DHT11_TYPE);
 
-const int DHT21_PIN = 4;       //Đọc dữ liệu từ DHT11 ở chân 2 trên mạch Arduino
-const int DHT21_TYPE = DHT21;
 DHT environmentSensor(DHT21_PIN, DHT21_TYPE);
 
 /*
  * DS18b20 sensor
  */
-// Chân nối với Arduino
-#define ONE_WIRE_BUS 7
 //Thiết đặt thư viện onewire
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature waterSensor(&oneWire);
@@ -33,8 +28,6 @@ DallasTemperature waterSensor(&oneWire);
 /*
  * Ultrasonic sensor
  */
-const int TRIG_PIN = 12;     // chân trig của HC-SR04
-const int ECHO_PIN = 13;     // chân echo của HC-SR04
 unsigned long duration; // biến đo thời gian
 int distance;           // biến lưu khoảng cách
 char distanceChar[8];
@@ -166,10 +159,10 @@ int readDistance()
   // Đo độ rộng xung HIGH ở chân echo. 
   duration = pulseIn(ECHO_PIN, HIGH);  
   // Tính khoảng cách đến vật
-  int v = int(duration*0.343/2);  // in mm
+  int v = int(duration*0.343/2/10);  // in cm
 
   char buffer [8];
-  sprintf(buffer, "%3d mm", v);
+  sprintf(buffer, "%2d cm", v);
   lcd.setCursor(8, 1);
   lcd.print(buffer);
 
@@ -205,8 +198,8 @@ void loop() {
   root["env.temp"] = readEnvironmentTemperature();
   root["env.humid"] = readEnvironmentHumidity();
   root["water.level"] = readDistance();
-  root.printTo(Serial);
-  Serial.print('\n');
+  //root.printTo(Serial);
+  //Serial.print('\n');
 
   //char buffer [50];
   //sprintf(buffer, "%3d mm", readDistance());
