@@ -17,17 +17,22 @@ npm install -g node-red-dashboard --unsafe-perm
 
 # DS18b20 sensor
 #npm install -g node-red-contrib-ds18b20-sensor --unsafe-perm
-npm install -g node-red-contrib-sensor-ds18b20 --unsafe-perm
+#npm install -g node-red-contrib-sensor-ds18b20 --unsafe-perm
 
 # DHT sensor
 #npm install -g node-red-contrib-dht-sensor --unsafe-perm
 
 # SRF04 or SRF05 range finder
-npm install -g ode-red-node-pisrf --unsafe-perm
+#npm install -g ode-red-node-pisrf --unsafe-perm
 
+# Python depedencies
 apt-get install python-pip python-virtualenv
 python -m pip install --upgrade pip setuptools wheel
 pip install Adafruit_DHT
+
+# Utilities
+apt-get install vim
+apt-get install mosquitto mosquitto-clients python-mosquitto
 
 # Free swap
 #swapoff -a && swapon -a
@@ -35,7 +40,7 @@ pip install Adafruit_DHT
 #/etc/init.d/udev restart
 
 # Start node-red
-node-red-pi
+#node-red-pi
 
 
 #sudo dpkg -P hplip; sudo apt-get update; sudo apt-get install hplip
