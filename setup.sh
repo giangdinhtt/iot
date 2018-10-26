@@ -38,6 +38,7 @@ apt-get install -y mosquitto mosquitto-clients
 echo "listener 1883" >> /etc/mosquitto/conf.d/websocket.conf
 echo "listener 1884" >> /etc/mosquitto/conf.d/websocket.conf
 echo "protocol websockets" >> /etc/mosquitto/conf.d/websocket.conf
+service mosquitto restart
 
 # Free swap
 #swapoff -a && swapon -a
