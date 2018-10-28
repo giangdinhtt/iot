@@ -1,16 +1,61 @@
-/**
- * Arduino part for Hydroponic automation system
- */
+#include <ArduinoJson.h>
+
+/*****************************************
+ * Include Libraries
+ ****************************************/
+#include <ConfigManager.h>
+#include <DoubleResetDetect.h>
+
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <ArduinoJson.h>
+//#include <ArduinoJson.h>
 #include <DHT.h>
-#include "Nano.h"
+/****************************************
+ * Define Constants
+ ****************************************/
+// maximum number of seconds between resets that
+// counts as a double reset 
+#define DRD_TIMEOUT 2.0
+
+// address to the block in the RTC user memory
+// change it if it collides with another usage 
+// of the address block
+#define DRD_ADDRESS 0x00
+
+DoubleResetDetect drd(DRD_TIMEOUT, DRD_ADDRESS);
+
+#define AP_NAME "Hydroponic_AP" // Assigns your Access Point name
+#define MQTT_SERVER "mqtt.giang.xyz"
+#define MQTT_PORT 1884
+#define MQTT_CLIENT_ID "iot.hydroponic.esp8266"
+#define DEVICE_LABEL "my-device" // Assigns your Device Label
+#define VARIABLE_LABEL "my-variable" // Assigns your Variable Label
+#define BUILTIN_LED D4
 
 // Determine usage of LCD
 #define USE_DIPLAY true
+
+// LCD address
+#define LCD_ADDRESS 0x3f
+#define SDA_PIN D3  // GPIO0
+#define SLK_PIN D4  // GPIO2
+
+// 1-wire bus (for DS18b20)
+#define ONE_WIRE_BUS D2
+
+// Environment temperature/humidity sensor
+#define DHT21_PIN D5
+#define DHT21_TYPE DHT21
+
+// Controller temperature/humidity sensor
+#define DHT11_PIN D2
+#define DHT11_TYPE DHT11  //DHT11, DHT21 or AM2301, DHT22
+
+// Ultrasonic sensor: HC-SR04, JSN-SR04T-2.0
+#define TRIG_PIN D0
+#define ECHO_PIN D1
 
 LiquidCrystal_I2C lcd(LCD_ADDRESS, 16, 2);  // set the LCD address to 0x3f for a 16 chars and 2 line display
 
@@ -51,15 +96,15 @@ String float2String(float f)
 void setupPins()
 {
   //********** FOR ESP8266 NodeMCU: CHANGE PIN FUNCTION  TO GPIO **********
-  #if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32) //ESP8266 or ESP32
-    // D9/GPIO1 (TX) swap the pin to a GPIO.
-    pinMode(D9, FUNCTION_3); 
-    // D10/GPIO3 (RX) swap the pin to a GPIO.
-    pinMode(D10, FUNCTION_3);
+  //#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32) //ESP8266 or ESP32
+    //GPIO 1 (TX) swap the pin to a GPIO.
+    //pinMode(TRIG_PIN, FUNCTION_3); 
+    //GPIO 3 (RX) swap the pin to a GPIO.
+    //pinMode(ECHO_PIN, FUNCTION_3);
 
     // Setup I2C for LCD
     Wire.begin(SDA_PIN, SLK_PIN);
-  #endif
+  //#endif
 }
 
 void initLCD()
@@ -104,6 +149,7 @@ float readWaterTemperature()
     lcd.print("wa:");
     lcd.print(buffer);
   }
+
   return v;
 }
 
@@ -111,7 +157,6 @@ float readWaterTemperature()
 float readControllerTemperature()
 {
   float v = controllerSensor.readTemperature();
-
   if (USE_DIPLAY)
   {
     char buffer[4];
@@ -152,6 +197,7 @@ float readEnvironmentTemperature()
     lcd.print("en:");
     lcd.print(buffer);
   }
+
   return v;
 }
 
@@ -189,45 +235,107 @@ int readDistance()
     char buffer [8];
     sprintf(buffer, "%2d cm", v);
     lcd.setCursor(8, 1);
-    lcd.print(buffer);
+    //lcd.print("lv:");
+    lcd.print(buffer);  
   }
   return v;
 }
 
-void executeCommands()
+/**
+ * Setting AP
+ */
+struct Config {
+    char name[20];
+    bool enabled;
+    int8_t hour;
+    char password[20];
+    char mqttServer[32];
+    int8_t mqttPort;
+} config;
+
+struct Metadata {
+    int8_t version;
+} meta;
+
+ConfigManager configManager;
+
+void createCustomRoute(WebServer *server) {
+    server->on("/custom", HTTPMethod::HTTP_GET, [server](){
+        server->send(200, "text/plain", "Hello, World!");
+    });
+} 
+
+void setupAp()
 {
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    String incomingByte = Serial.readString();
-    Serial.println(incomingByte);
-    
-    // say what you got:
-    lcd.setCursor(0, 0);
-    lcd.print(incomingByte);
-  }
+    meta.version = 3;
+    // Setup config manager
+    configManager.setAPName(AP_NAME);
+    configManager.setAPFilename("/index.html");
+    configManager.addParameter("name", config.name, 20);
+    configManager.addParameter("enabled", &config.enabled);
+    configManager.addParameter("hour", &config.hour);
+    configManager.addParameter("password", config.password, 20, set);
+    configManager.addParameter("mqtt_server", config.mqttServer, 32, set);
+    configManager.addParameter("mqtt_port", &config.mqttPort);
+    configManager.addParameter("version", &meta.version, get);
+    configManager.begin(config);
+    configManager.save();
+
+    configManager.setAPCallback(createCustomRoute);
+    configManager.setAPICallback(createCustomRoute);
 }
 
-void setup() {
-  Serial.begin(9600);
-  initControllerSensor();
-  initEnvironmentSensor();
-  initWaterTemperatureSensor();
-  initWaterTankLevel();
-  if (USE_DIPLAY)
-  {
-    initLCD();
-  }
+void setup()
+{
+    Serial.begin(115200);
+    Serial.println();
+    /*
+    if (drd.detect())
+    {
+        Serial.println("Double reset boot");
+        for (int i = 0 ; i < EEPROM.length() ; i++) {
+          EEPROM.write(i, 0);
+        }
+        delay(1000);
+        ESP.reset();
+    }
+    else
+    {
+        Serial.println("** Normal boot **");
+    }*/
+    setupPins();
+    setupAp();
+    initControllerSensor();
+    initEnvironmentSensor();
+    initWaterTemperatureSensor();
+    initWaterTankLevel();
+    if (USE_DIPLAY)
+    {
+      initLCD();
+    }
 }
 
-void loop() {
+void loop()
+{
+  configManager.loop();
+  /*
   root["water.temp"] = readWaterTemperature();
   root["ctrl.temp"] = readControllerTemperature();
   root["ctrl.humid"] = readControllerHumidity();
   root["env.temp"] = readEnvironmentTemperature();
   root["env.humid"] = readEnvironmentHumidity();
   root["water.level"] = readDistance();
-  //root.printTo(Serial);
-  //Serial.print('\n');
+  root.printTo(Serial);
+  */
+  Serial.print(readWaterTemperature());
+  Serial.println(" C");
+  Serial.print(readEnvironmentTemperature());
+  Serial.println(" C");
+  Serial.print(readEnvironmentHumidity());
+  Serial.println(" %");
+  Serial.print(readDistance());
+  Serial.println(" cm");
+  Serial.println("==========");
 
   //char buffer [50];
   //sprintf(buffer, "%3d mm", readDistance());
@@ -236,5 +344,5 @@ void loop() {
 
   //executeCommands();
 
-  delay(500);
+  delay(2000);
 }
