@@ -24,4 +24,15 @@
 #define TRIG_PIN D0
 #define ECHO_PIN D1
 
+// Relay pins
+#define SWITCH_1 D6
+#define SWITCH_2 D7
+#define SWITCH_3 D9
+#define SWITCH_4 D10
+#define PUMP_TANK_PIN SWITCH_1
+#define PUMP_SPRINKLE_PIN SWITCH_2
+#define PUMP_MIXER_1_PIN SWITCH_3
+#define PUMP_MIXER_2_PIN SWITCH_4
+#define RELAY_PINS {SWITCH_1, SWITCH_2, SWITCH_3, SWITCH_4}
+
 #endif

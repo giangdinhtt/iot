@@ -40,6 +40,7 @@ char distanceChar[8];
  */
 StaticJsonBuffer<200> jsonBuffer;
 JsonObject& root = jsonBuffer.createObject();
+JsonObject& commandRoot;
 
 String float2String(float f)
 {
@@ -56,7 +57,9 @@ void setupPins()
     pinMode(D9, FUNCTION_3); 
     // D10/GPIO3 (RX) swap the pin to a GPIO.
     pinMode(D10, FUNCTION_3);
+  #endif
 
+  #if defined(SDA_PIN) && defined(SLK_PIN)
     // Setup I2C for LCD
     Wire.begin(SDA_PIN, SLK_PIN);
   #endif
@@ -89,6 +92,17 @@ void initWaterTankLevel()
   pinMode(ECHO_PIN, INPUT);    // chân echo sẽ nhận tín hiệu
 }
 
+void initRelays(void)
+{
+  // Relay triggered as LOW, set HIGH level to turn them OFF
+  for(int i = 0; i < 4; i++ ) {
+    digitalWrite(RELAY_PINS[i], HIGH);
+  }
+}
+
+void initAccessPoint()
+{}
+
 //DS18b20 sensor
 float readWaterTemperature()
 {
@@ -100,7 +114,7 @@ float readWaterTemperature()
     char buffer[4];
     dtostrf(v, 2, 1, buffer);
     sprintf(buffer,"%s", buffer);
-    lcd.setCursor(0, 1);
+    lcd.setCursor(0, 0);
     lcd.print("wa:");
     lcd.print(buffer);
   }
@@ -188,53 +202,84 @@ int readDistance()
   {
     char buffer [8];
     sprintf(buffer, "%2d cm", v);
-    lcd.setCursor(8, 1);
+    lcd.setCursor(0, 1);
+    lcd.print("lv:");
     lcd.print(buffer);
   }
   return v;
 }
 
-void executeCommands()
+void waitForCommands()
 {
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    String incomingByte = Serial.readString();
-    Serial.println(incomingByte);
-    
-    // say what you got:
-    lcd.setCursor(0, 0);
-    lcd.print(incomingByte);
+  char json[] = "{\"pump.tank\":1,\"pump.sprinkle\":0,\"pump.mixer_1\":1,\"pump.mixer_2\":0}";
+  commandRoot = jsonBuffer.parseObject(json);
+  if (!commandRoot.success()) {
+    Serial.println("parseObject() failed");
+    return;
+  }
+
+  commandRoot.printTo(Serial);
+  lcd.setCursor(8, 1);
+  lcd.print("        ");
+  lcd.setCursor(8, 1);
+  if (commandRoot.containsKey("pump.tank"))
+  {
+    digitalWrite(PUMP_TANK_PIN, !commandRoot["pump.tank"]);
+    lcd.print("s1");
+  }
+  if (commandRoot.containsKey("pump.sprinkle"))
+  {
+    digitalWrite(PUMP_SPRINKLE_PIN, !commandRoot["pump.sprinkle"]);
+    lcd.print("s2");
+  }
+  if (commandRoot.containsKey("pump.mixer_1"))
+  {
+    digitalWrite(PUMP_MIXER_1_PIN, !commandRoot["pump.mixer_1"]);
+    lcd.print("s3");
+  }
+  if (commandRoot.containsKey("pump.mixer_2"))
+  {
+    digitalWrite(PUMP_MIXER_2_PIN, !commandRoot["pump.mixer_2"]);
+    lcd.print("s4");
   }
 }
 
 void setup() {
   Serial.begin(9600);
-  initControllerSensor();
-  initEnvironmentSensor();
-  initWaterTemperatureSensor();
-  initWaterTankLevel();
+  setupPins();
   if (USE_DIPLAY)
   {
     initLCD();
   }
+  initAccessPoint();
+
+  //initControllerSensor();
+  initEnvironmentSensor();
+  initWaterTemperatureSensor();
+  initWaterTankLevel();
+  initRelays();
 }
 
 void loop() {
   root["water.temp"] = readWaterTemperature();
-  root["ctrl.temp"] = readControllerTemperature();
-  root["ctrl.humid"] = readControllerHumidity();
+  //root["ctrl.temp"] = readControllerTemperature();
+  //root["ctrl.humid"] = readControllerHumidity();
   root["env.temp"] = readEnvironmentTemperature();
   root["env.humid"] = readEnvironmentHumidity();
   root["water.level"] = readDistance();
+
+  root["pump.tank"] = !digitalRead(PUMP_TANK_PIN);
+  root["pump.sprinkle"] = !digitalRead(PUMP_SPRINKLE_PIN);
+  root["pump.mixer_1"] = !digitalRead(PUMP_MIXER_1_PIN);
+  root["pump.mixer_2"] = !digitalRead(PUMP_MIXER_2_PIN);
+
+  String output;
+  root.printTo(output);
+  
+  Serial.println(output);
   //root.printTo(Serial);
-  //Serial.print('\n');
 
-  //char buffer [50];
-  //sprintf(buffer, "%3d mm", readDistance());
-  //lcd.setCursor(0, 1);
-  //lcd.print(buffer);
-
-  //executeCommands();
+  waitForCommands();
 
   delay(500);
 }
