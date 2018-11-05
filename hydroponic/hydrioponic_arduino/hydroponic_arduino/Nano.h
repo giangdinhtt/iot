@@ -4,9 +4,6 @@
 #ifndef Nano_H
 #define Nano_H
 
-// LCD address
-#define LCD_ADDRESS 0x3f
-
 // 1-wire bus (for DS18b20)
 #define ONE_WIRE_BUS 2
 
@@ -21,5 +18,11 @@
 // Ultrasonic sensor: HC-SR04, JSN-SR04T-2.0
 #define TRIG_PIN 5
 #define ECHO_PIN 6
+
+// Relay pins
+#define SWITCH_1 D6
+#define SWITCH_2 D7
+#define SWITCH_3 D8
+#define SWITCH_4 D9
 
 #endif

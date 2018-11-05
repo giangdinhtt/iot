@@ -1,11 +1,19 @@
 /**
  * Pins definitions for ESP8266 NodeMCU LoLin
  */
-#ifndef Esp8266
-#define Esp8266
+#ifndef ESP8266_H
+#define ESP8266_H
+
+#include <ESP8266WiFi.h>          //ESP8266 Core WiFi Library (you most likely already have this in your sketch)
+#include <DNSServer.h>            //Local DNS Server used for redirecting all requests to the configuration portal
+#include <ESP8266WebServer.h>     //Local WebServer used to serve the configuration portal
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+
+// Serial baud rate
+#undef BAUD_RATE
+#define BAUD_RATE 115200
 
 // LCD address
-#define LCD_ADDRESS 0x3f
 #define SDA_PIN D3  // GPIO0
 #define SLK_PIN D4  // GPIO2
 
@@ -29,10 +37,14 @@
 #define SWITCH_2 D7
 #define SWITCH_3 D9
 #define SWITCH_4 D10
-#define PUMP_TANK_PIN SWITCH_1
-#define PUMP_SPRINKLE_PIN SWITCH_2
-#define PUMP_MIXER_1_PIN SWITCH_3
-#define PUMP_MIXER_2_PIN SWITCH_4
-#define RELAY_PINS {SWITCH_1, SWITCH_2, SWITCH_3, SWITCH_4}
+
+/**
+ * 
+ */
+#define AP_NAME "HydroponicAP" // Assigns your Access Point name
+#define AP_PASSWORD "12345678" // Assigns your Access Point name
+#define MQTT_SERVER "mqtt.giang.xyz"
+#define MQTT_PORT 1884
+#define MQTT_CLIENT_ID "iot.hydroponic.esp8266"
 
 #endif

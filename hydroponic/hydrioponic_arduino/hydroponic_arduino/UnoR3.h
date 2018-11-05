@@ -1,11 +1,8 @@
 /**
  * Pins definitions for Arduino Uno R3
  */
-#ifndef Nano_R3
-#define Nano_R3
-
-// LCD address
-#define LCD_ADDRESS 0x3f
+#ifndef Nano_R3_H
+#define Nano_R3_H
 
 // 1-wire bus (for DS18b20)
 #define ONE_WIRE_BUS 7
