@@ -1,24 +1,14 @@
 /**
  * Arduino part for Hydroponic automation system
  */
+#include <FS.h>                   //this needs to be first, or it all crashes and burns...
 #include "hydroponic_arduino.h"
 #include "Esp8266.h"
-#include <DoubleResetDetect.h>
+#include <PubSubClient.h>
 
 /****************************************
  * Define Constants
  ****************************************/
-// maximum number of seconds between resets that
-// counts as a double reset 
-#define DRD_TIMEOUT 2.0
-
-// address to the block in the RTC user memory
-// change it if it collides with another usage 
-// of the address block
-#define DRD_ADDRESS 0x00
-
-DoubleResetDetect drd(DRD_TIMEOUT, DRD_ADDRESS);
-
 /*
 #if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32) //ESP8266 or ESP32
   #include <ESP8266WiFi.h>          //ESP8266 Core WiFi Library (you most likely already have this in your sketch)
@@ -28,22 +18,6 @@ DoubleResetDetect drd(DRD_TIMEOUT, DRD_ADDRESS);
 #endif
 */
 //LiquidCrystal_I2C lcd(LCD_ADDRESS, 16, 2);  // set the LCD address to 0x3f for a 16 chars and 2 line display
-
-/**
- * Wifi configurations
- */
-//define your default values here, if there are different values in config.json, they are overwritten.
-char mqtt_server[40];
-char mqtt_port[6] = "80";
-//flag for saving data
-bool shouldSaveConfig = false;
-
-//callback notifying us of the need to save config
-void saveConfigCallback () {
-  Serial.println("Should save config");
-  shouldSaveConfig = true;
-}
-
 /*
  * DHT sensor
  */
@@ -65,11 +39,9 @@ unsigned long duration; // biến đo thời gian
 int distance;           // biến lưu khoảng cách
 char distanceChar[8];
 
-/*
- * Init json serialize
- */
-StaticJsonBuffer<200> jsonBuffer;
-JsonObject& root = jsonBuffer.createObject();
+// Timers auxiliar variables
+long now = millis();
+long lastMeasure = 0;
 
 String float2String(float f)
 {
@@ -133,144 +105,6 @@ void initRelays(void)
   digitalWrite(SWITCH_2, HIGH);
   //digitalWrite(SWITCH_3, HIGH);
   //digitalWrite(SWITCH_4, HIGH);
-}
-
-void configModeCallback(WiFiManager *myWiFiManager) {
-  if (USE_DIPLAY)
-  {
-    lcd.setCursor(0, 1);
-    lcd.print("Entered AP mode");
-  }
-  Serial.println("Entered config mode");
-  Serial.println(WiFi.softAPIP());
-
-  Serial.println(myWiFiManager->getConfigPortalSSID());
-}
-
-void initAccessPoint()
-{
-  //clean FS, for testing
-  //SPIFFS.format();
-
-  //read configuration from FS json
-  Serial.println("mounting FS...");
-
-  if (SPIFFS.begin()) {
-    Serial.println("mounted file system");
-    if (SPIFFS.exists("/config.json")) {
-      //file exists, reading and loading
-      Serial.println("reading config file");
-      File configFile = SPIFFS.open("/config.json", "r");
-      if (configFile) {
-        Serial.println("opened config file");
-        size_t size = configFile.size();
-        // Allocate a buffer to store contents of the file.
-        std::unique_ptr<char[]> buf(new char[size]);
-
-        configFile.readBytes(buf.get(), size);
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& json = jsonBuffer.parseObject(buf.get());
-        json.printTo(Serial);
-        if (json.success()) {
-          Serial.println("\nparsed json");
-
-          strcpy(mqtt_server, json["mqtt_server"]);
-          strcpy(mqtt_port, json["mqtt_port"]);
-
-        } else {
-          Serial.println("failed to load json config, using defaults");
-          strcpy(mqtt_server, MQTT_SERVER);
-          strcpy(mqtt_port, MQTT_PORT);
-        }
-        configFile.close();
-      }
-    }
-  } else {
-    Serial.println("failed to mount FS");
-  }
-  //end read
-
-  //WiFiManager
-  //Local intialization. Once its business is done, there is no need to keep it around
-  WiFiManager wifiManager;
-
-  /**
-   * Press RST button 2 times cause access point reset
-   */  
-  if (drd.detect())
-  {
-      Serial.println("Double reset boot, resetting AP");
-      wifiManager.resetSettings();  //reset settings - for testing
-  }
-
-  //set config save notify callback
-  wifiManager.setAPCallback(configModeCallback);
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
-
-  // The extra parameters to be configured (can be either global or just in the setup)
-  // After connecting, parameter.getValue() will get you the configured value
-  // id/name placeholder/prompt default length
-  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", MQTT_SERVER, 40);
-  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", MQTT_PORT, 6);
-
-  //add all your parameters here
-  wifiManager.addParameter(&custom_mqtt_server);
-  wifiManager.addParameter(&custom_mqtt_port);
-
-  //set minimum quality of signal so it ignores AP's under that quality. Defaults to 8%
-  wifiManager.setMinimumSignalQuality(10);
-  
-  //sets timeout until configuration portal gets turned off
-  //useful to make it all retry or go to sleep
-  //in seconds
-  //wifiManager.setTimeout(120);
-
-  //fetches ssid and pass and tries to connect
-  //if it does not connect it starts an access point with the specified name
-  //here  "AutoConnectAP"
-  //and goes into a blocking loop awaiting configuration
-  //first parameter is name of access point, second is the password
-  if (!wifiManager.autoConnect(AP_NAME, AP_PASSWORD)) {
-    Serial.println("failed to connect and hit timeout");
-    delay(3000);
-    //reset and try again, or maybe put it to deep sleep
-    ESP.reset();
-    delay(5000);
-  }
-
-  //if you get here you have connected to the WiFi
-  Serial.println("connected...yeey :)");
-
-  //read updated parameters
-  strcpy(mqtt_server, custom_mqtt_server.getValue());
-  strcpy(mqtt_port, custom_mqtt_port.getValue());
-
-  //save the custom parameters to FS
-  if (shouldSaveConfig) {
-    Serial.println("saving config");
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& json = jsonBuffer.createObject();
-    json["mqtt_server"] = mqtt_server;
-    json["mqtt_port"] = mqtt_port;
-
-    File configFile = SPIFFS.open("/config.json", "w");
-    if (!configFile) {
-      Serial.println("failed to open config file for writing");
-    }
-
-    json.printTo(Serial);
-    json.printTo(configFile);
-    configFile.close();
-    //end save
-  }
-
-  Serial.println("local ip");
-  Serial.println(WiFi.localIP());
-  if (USE_DIPLAY)
-  {
-    lcd.setCursor(0, 1);
-    lcd.print(WiFi.localIP());
-  }
 }
 
 //DS18b20 sensor
@@ -365,18 +199,20 @@ int readDistance()
   /* Tính toán thời gian */
   // Đo độ rộng xung HIGH ở chân echo. 
   duration = pulseIn(ECHO_PIN, HIGH);  
-  // Tính khoảng cách đến vật
-  int v = int(duration*0.343/2/10);  // in cm
+  // Distance from water tank roof to water surface
+  int s = int(duration*0.343/2/10);  // in cm
+  // Water level
+  int lv = tank_height - s;
 
   if (USE_DIPLAY)
   {
     char buffer [8];
-    sprintf(buffer, "%2dcm", v);
+    sprintf(buffer, "%2dcm", lv);
     lcd.setCursor(0, 1);
     lcd.print("lv:");
     lcd.print(buffer);
   }
-  return v;
+  return lv;
 }
 
 void showSwitchesStatus()
@@ -406,40 +242,58 @@ void showSwitchesStatus()
   }
 }
 
-void waitForCommands()
+void performCommand(char* json)
 {
-  char json[] = "{\"switch-1\":1,\"switch-2\":0,\"switch-3\":0,\"switch-4\":0}";
-  StaticJsonBuffer<200> commandJsonBuffer;
+  //char json[] = "{\"switch-1\":1,\"switch-2\":0,\"switch-3\":0,\"switch-4\":0}";
+  StaticJsonBuffer<100> commandJsonBuffer;
   JsonObject& commandRoot = commandJsonBuffer.parseObject(json);
   if (!commandRoot.success()) {
     Serial.println("parseObject() failed");
     return;
   }
 
-  String output;
-  commandRoot.printTo(output);
-  Serial.println(output);
-
-  if (commandRoot.containsKey("switch-1"))
+  if (commandRoot.containsKey("sw-1"))
   {
-    digitalWrite(SWITCH_1, !commandRoot["switch-1"]);
+    digitalWrite(SWITCH_1, !commandRoot["sw-1"]);
   }
-  if (commandRoot.containsKey("switch-2"))
+  if (commandRoot.containsKey("sw-2"))
   {
-    digitalWrite(SWITCH_2, !commandRoot["switch-2"]);
+    digitalWrite(SWITCH_2, !commandRoot["sw-2"]);
   }
-  if (commandRoot.containsKey("switch-3"))
+  if (commandRoot.containsKey("sw-3"))
   {
-    digitalWrite(SWITCH_3, !commandRoot["switch-3"]);
+    digitalWrite(SWITCH_3, !commandRoot["sw-3"]);
   }
-  if (commandRoot.containsKey("switch-4"))
+  if (commandRoot.containsKey("sw-4"))
   {
-    digitalWrite(SWITCH_4, !commandRoot["switch-4"]);
+    digitalWrite(SWITCH_4, !commandRoot["sw-4"]);
   }
 }
 
+/*
+ * Init json serialize
+ */
+StaticJsonBuffer<100> sensorJsonBuffer;
+JsonObject& sensor = sensorJsonBuffer.createObject();
+
+StaticJsonBuffer<100> relayJsonBuffer;
+JsonObject& relay = relayJsonBuffer.createObject();
+
+// Initializes the espClient. You should change the espClient name if you have multiple ESPs running in your home automation system
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
 void setup() {
   Serial.begin(BAUD_RATE);
+  if (drd.detect())
+  {
+      Serial.println("** Double reset boot **");
+      hard_reset_required = true;
+  }
+  else
+  {
+      Serial.println("** Normal boot **");
+  }
   setupPins();
   if (USE_DIPLAY)
   {
@@ -448,37 +302,145 @@ void setup() {
     lcd.print("BaudRate: ");
     lcd.print(BAUD_RATE);
   }
-  initAccessPoint();
-
-  //initControllerSensor();
+  #if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32) //ESP8266 or ESP32
+    setupAccessPoint();
+  #endif
+  initControllerSensor();
   initEnvironmentSensor();
   initWaterTemperatureSensor();
   initWaterTankLevel();
   initRelays();
+  delay(1000);
+  if (USE_DIPLAY)
+  {
+    lcd.clear();
+  }
+  mqttClient.setServer(mqtt_server, mqtt_port);
+  mqttClient.setCallback(callback);
 }
 
 void loop() {
-  root["water.temp"] = readWaterTemperature();
-  //root["ctrl.temp"] = readControllerTemperature();
-  //root["ctrl.humid"] = readControllerHumidity();
-  root["env.temp"] = readEnvironmentTemperature();
-  root["env.humid"] = readEnvironmentHumidity();
-  root["water.level"] = readDistance();
+  float waterTemp = readWaterTemperature();
+  if (!isnan(waterTemp) && waterTemp > 0)
+  {
+    sensor["water.temp"] = waterTemp;
+  }
 
-  root["switch-1"] = (int) !digitalRead(SWITCH_1);
-  root["switch-2"] = (int) !digitalRead(SWITCH_2);
-  root["switch-3"] = (int) !digitalRead(SWITCH_3);
-  root["switch-4"] = (int) !digitalRead(SWITCH_4);
+  float envTemp = readEnvironmentTemperature();
+  if (!isnan(envTemp))
+  {
+    sensor["env.temp"] = envTemp;
+  }
 
+  float envHumid = readEnvironmentHumidity();
+  if (!isnan(envHumid))
+  {
+    sensor["env.humid"] = envHumid;
+  }
+
+  int waterLevel = readDistance();
+  if (!isnan(waterLevel))
+  {
+    sensor["water.level"] = waterLevel;
+  }
+
+  sensor.printTo(Serial);
+  Serial.println();
+  
+  //sensor["ctrl.temp"] = readControllerTemperature();
+  //sensor["ctrl.humid"] = readControllerHumidity();
+  //sensor["env.temp"] = readEnvironmentTemperature();
+  //sensor["env.humid"] = readEnvironmentHumidity();
+  //sensor["water.level"] = readDistance();
+
+  relay["sw-1"] = (int) !digitalRead(SWITCH_1);
+  relay["sw-2"] = (int) !digitalRead(SWITCH_2);
+  relay["sw-3"] = (int) !digitalRead(SWITCH_3);
+  relay["sw-4"] = (int) !digitalRead(SWITCH_4);
+
+  char relayOutput[100];
+  relay.printTo(relayOutput);
+  Serial.println(relayOutput);
   showSwitchesStatus();
 
-  String output;
-  root.printTo(output);
-  
-  Serial.println(output);
-  //root.printTo(Serial);
+  if (!mqttClient.connected()) {
+    reconnect();
+  }
+  if(!mqttClient.loop()) {
+    mqttClient.connect(MQTT_CLIENT_ID);
+  }
 
-  waitForCommands();
+  mqttClient.publish("iot/hydroponic/relay", relayOutput);
 
+  now = millis();
+  // Publishes sensor data intervally
+  if (now - lastMeasure > READ_INTERVAL) {
+    lastMeasure = now;
+    char sensorOutput[100];
+    sensor.printTo(sensorOutput);
+    mqttClient.publish("iot/hydroponic/sensor", sensorOutput);
+  }
+
+  //free(output);
   delay(500);
+}
+
+void callback(String topic, byte* message, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+
+  // Allocate the correct amount of memory for the payload copy
+  char payload[length];
+  for (int i = 0; i < length; i++) {
+    payload[i] = (char) message[i];
+  }
+  /*
+  String messageTemp;
+  
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)message[i]);
+    messageTemp += (char)message[i];
+  }
+  */
+  Serial.println(payload);
+
+  if (topic=="iot/hydroponic/controller"){
+      performCommand(payload);
+  }
+  // Free the memory
+  //free(payload);
+}
+
+// This functions reconnects your ESP8266 to your MQTT broker
+// Change the function below if you want to subscribe to more topics with your ESP8266 
+void reconnect() {
+  // Loop until we're reconnected
+  while (!mqttClient.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    /*
+     YOU MIGHT NEED TO CHANGE THIS LINE, IF YOU'RE HAVING PROBLEMS WITH MQTT MULTIPLE CONNECTIONS
+     To change the ESP device ID, you will have to give a new name to the ESP8266.
+     Here's how it looks:
+       if (mqttClient.connect("ESP8266Client")) {
+     You can do it like this:
+       if (mqttClient.connect("ESP1_Office")) {
+     Then, for the other ESP:
+       if (mqttClient.connect("ESP2_Garage")) {
+      That should solve your MQTT multiple connections problem
+    */
+    if (mqttClient.connect(MQTT_CLIENT_ID)) {
+      Serial.println("connected");  
+      // Subscribe or resubscribe to a topic
+      // You can subscribe to more topics (to control more LEDs in this example)
+      mqttClient.subscribe("iot/hydroponic/controller");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
 }
