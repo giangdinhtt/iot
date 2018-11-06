@@ -34,7 +34,7 @@ DoubleResetDetect drd(DRD_TIMEOUT, DRD_ADDRESS);
  */
 //define your default values here, if there are different values in config.json, they are overwritten.
 char mqtt_server[40];
-char mqtt_port[6] = "8080";
+char mqtt_port[6] = "80";
 //flag for saving data
 bool shouldSaveConfig = false;
 
@@ -135,7 +135,12 @@ void initRelays(void)
   //digitalWrite(SWITCH_4, HIGH);
 }
 
-void configModeCallback (WiFiManager *myWiFiManager) {
+void configModeCallback(WiFiManager *myWiFiManager) {
+  if (USE_DIPLAY)
+  {
+    lcd.setCursor(0, 1);
+    lcd.print("Entered AP mode");
+  }
   Serial.println("Entered config mode");
   Serial.println(WiFi.softAPIP());
 
@@ -144,7 +149,6 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 
 void initAccessPoint()
 {
-  /*
   //clean FS, for testing
   //SPIFFS.format();
 
@@ -172,10 +176,11 @@ void initAccessPoint()
 
           strcpy(mqtt_server, json["mqtt_server"]);
           strcpy(mqtt_port, json["mqtt_port"]);
-          strcpy(blynk_token, json["blynk_token"]);
 
         } else {
-          Serial.println("failed to load json config");
+          Serial.println("failed to load json config, using defaults");
+          strcpy(mqtt_server, MQTT_SERVER);
+          strcpy(mqtt_port, MQTT_PORT);
         }
         configFile.close();
       }
@@ -184,37 +189,35 @@ void initAccessPoint()
     Serial.println("failed to mount FS");
   }
   //end read
-  */
-
-  // The extra parameters to be configured (can be either global or just in the setup)
-  // After connecting, parameter.getValue() will get you the configured value
-  // id/name placeholder/prompt default length
-  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
-  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
 
-  //set config save notify callback
-  wifiManager.setAPCallback(configModeCallback);
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
-
-  //add all your parameters here
-  wifiManager.addParameter(&custom_mqtt_server);
-  wifiManager.addParameter(&custom_mqtt_port);
-
   /**
-   * Press RST button 2 times to reset access point
-   */
+   * Press RST button 2 times cause access point reset
+   */  
   if (drd.detect())
   {
       Serial.println("Double reset boot, resetting AP");
       wifiManager.resetSettings();  //reset settings - for testing
   }
 
-  //set minimu quality of signal so it ignores AP's under that quality
-  //defaults to 8%
+  //set config save notify callback
+  wifiManager.setAPCallback(configModeCallback);
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+
+  // The extra parameters to be configured (can be either global or just in the setup)
+  // After connecting, parameter.getValue() will get you the configured value
+  // id/name placeholder/prompt default length
+  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", MQTT_SERVER, 40);
+  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", MQTT_PORT, 6);
+
+  //add all your parameters here
+  wifiManager.addParameter(&custom_mqtt_server);
+  wifiManager.addParameter(&custom_mqtt_port);
+
+  //set minimum quality of signal so it ignores AP's under that quality. Defaults to 8%
   wifiManager.setMinimumSignalQuality(10);
   
   //sets timeout until configuration portal gets turned off
@@ -249,20 +252,25 @@ void initAccessPoint()
     JsonObject& json = jsonBuffer.createObject();
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
-/*
+
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
       Serial.println("failed to open config file for writing");
     }
-*/
+
     json.printTo(Serial);
-//    json.printTo(configFile);
-//    configFile.close();
+    json.printTo(configFile);
+    configFile.close();
     //end save
   }
 
   Serial.println("local ip");
   Serial.println(WiFi.localIP());
+  if (USE_DIPLAY)
+  {
+    lcd.setCursor(0, 1);
+    lcd.print(WiFi.localIP());
+  }
 }
 
 //DS18b20 sensor
@@ -436,7 +444,7 @@ void setup() {
   if (USE_DIPLAY)
   {
     initLCD();
-    lcd.setCursor(0, 1);
+    lcd.setCursor(0, 0);
     lcd.print("BaudRate: ");
     lcd.print(BAUD_RATE);
   }
