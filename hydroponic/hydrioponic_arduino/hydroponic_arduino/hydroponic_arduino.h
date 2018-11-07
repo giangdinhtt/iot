@@ -38,6 +38,6 @@ bool hard_reset_required = false;
 
 DoubleResetDetect drd(DRD_TIMEOUT, DRD_ADDRESS);
    
-int tank_height = 50;  // water tank's height (in cm)
+int tank_height = 30;  // water tank's height (in cm)
 
 #endif

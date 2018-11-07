@@ -43,21 +43,16 @@ char distanceChar[8];
 long now = millis();
 long lastMeasure = 0;
 
-String float2String(float f)
-{
-  char buffer[6];
-  dtostrf(f, 2, 1, buffer);
-  return String(buffer);
-}
+void(* resetFunc) (void) = 0; //declare reset function @ address 0
 
 void setupPins()
 {
   //********** FOR ESP8266 NodeMCU: CHANGE PIN FUNCTION  TO GPIO **********
   #if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32) //ESP8266 or ESP32
     // D9/GPIO1 (TX) swap the pin to a GPIO.
-    //pinMode(D9, FUNCTION_3);
+    pinMode(D9, FUNCTION_3);
     // D10/GPIO3 (RX) swap the pin to a GPIO.
-    //pinMode(D10, FUNCTION_3);
+    pinMode(D10, FUNCTION_3);
   #endif
 
   #if defined(SDA_PIN) && defined(SLK_PIN)
@@ -191,7 +186,7 @@ int readDistance()
 {
   /* Phát xung từ chân trig */
   digitalWrite(TRIG_PIN, LOW);  // tắt chân trig
-  delayMicroseconds(5);
+  delayMicroseconds(100);
   digitalWrite(TRIG_PIN, HIGH); // phát xung từ chân trig
   delayMicroseconds(10);    // xung có độ dài 5 microSeconds
   digitalWrite(TRIG_PIN, LOW);  // tắt chân trig
@@ -319,29 +314,43 @@ void setup() {
   mqttClient.setCallback(callback);
 }
 
+float lastWaterTemp;
+float lastEnvTemp;
+float lastEnvHumid;
+int lastWaterLevel;
+
 void loop() {
+  bool sensorChanged = false;
   float waterTemp = readWaterTemperature();
-  if (!isnan(waterTemp) && waterTemp > 0)
+  if (!isnan(waterTemp) && waterTemp > 0 && waterTemp != lastWaterTemp)
   {
     sensor["water.temp"] = waterTemp;
+    lastWaterTemp = waterTemp;
+    sensorChanged = true;
   }
 
   float envTemp = readEnvironmentTemperature();
-  if (!isnan(envTemp))
+  if (!isnan(envTemp) && envTemp > 0 && envTemp != lastEnvTemp)
   {
     sensor["env.temp"] = envTemp;
+    lastEnvTemp = envTemp;
+    sensorChanged = true;
   }
 
   float envHumid = readEnvironmentHumidity();
-  if (!isnan(envHumid))
+  if (!isnan(envHumid) && envHumid > 0 && envHumid != lastEnvHumid)
   {
     sensor["env.humid"] = envHumid;
+    lastEnvHumid = envHumid;
+    sensorChanged = true;
   }
 
   int waterLevel = readDistance();
-  if (!isnan(waterLevel))
+  if (!isnan(waterLevel) && waterLevel != lastWaterLevel)
   {
     sensor["water.level"] = waterLevel;
+    lastWaterLevel = waterLevel;
+    sensorChanged = true;
   }
 
   sensor.printTo(Serial);
@@ -374,14 +383,13 @@ void loop() {
 
   now = millis();
   // Publishes sensor data intervally
-  if (now - lastMeasure > READ_INTERVAL) {
+  if (sensorChanged || now - lastMeasure > READ_INTERVAL) {
     lastMeasure = now;
     char sensorOutput[100];
     sensor.printTo(sensorOutput);
     mqttClient.publish("iot/hydroponic/sensor", sensorOutput);
   }
 
-  //free(output);
   delay(500);
 }
 
@@ -407,9 +415,14 @@ void callback(String topic, byte* message, unsigned int length) {
 
   if (topic=="iot/hydroponic/controller"){
       performCommand(payload);
-  }
-  // Free the memory
-  //free(payload);
+  } else if (topic=="iot/hydroponic/reset"){
+    #if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32) //ESP8266 or ESP32
+      ESP.reset();
+      delay(1000);
+    #endif
+    Serial.println("Arduino reset");
+    resetFunc();
+  } 
 }
 
 // This functions reconnects your ESP8266 to your MQTT broker
@@ -435,6 +448,7 @@ void reconnect() {
       // Subscribe or resubscribe to a topic
       // You can subscribe to more topics (to control more LEDs in this example)
       mqttClient.subscribe("iot/hydroponic/controller");
+      mqttClient.subscribe("iot/hydroponic/reset");
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
