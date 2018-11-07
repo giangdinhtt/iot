@@ -345,16 +345,17 @@ void loop() {
     sensorChanged = true;
   }
 
+
   int waterLevel = readDistance();
-  if (!isnan(waterLevel) && waterLevel != lastWaterLevel)
+  if (!isnan(waterLevel) && waterLevel != tank_height && waterLevel != lastWaterLevel)
   {
     sensor["water.level"] = waterLevel;
     lastWaterLevel = waterLevel;
     sensorChanged = true;
   }
 
-  sensor.printTo(Serial);
-  Serial.println();
+  //sensor.printTo(Serial);
+  //Serial.println();
   
   //sensor["ctrl.temp"] = readControllerTemperature();
   //sensor["ctrl.humid"] = readControllerHumidity();
@@ -369,7 +370,7 @@ void loop() {
 
   char relayOutput[100];
   relay.printTo(relayOutput);
-  Serial.println(relayOutput);
+  //Serial.println(relayOutput);
   showSwitchesStatus();
 
   if (!mqttClient.connected()) {
