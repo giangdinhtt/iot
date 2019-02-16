@@ -7,13 +7,13 @@ git clone https://github.com/giangdinhtt/iot.git
 cd iot
 
 # install node-red and depedencies
-eval "bash <(curl -sL https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/update-nodejs-and-nodered)"
-npm install -g npm --unsafe-perm
-systemctl enable nodered.service
-cd ~/.node-red/
+#eval "bash <(curl -sL https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/update-nodejs-and-nodered)"
+#npm install -g npm --unsafe-perm
+#systemctl enable nodered.service
+#cd ~/.node-red/
 #npm install -g node-red-node-arduino --unsafe-perm
-npm install -g node-red-contrib-gpio --unsafe-perm
-npm install -g node-red-dashboard --unsafe-perm
+#npm install -g node-red-contrib-gpio --unsafe-perm
+#npm install -g node-red-dashboard --unsafe-perm
 
 # DS18b20 sensor
 #npm install -g node-red-contrib-ds18b20-sensor --unsafe-perm
@@ -28,7 +28,7 @@ npm install -g node-red-dashboard --unsafe-perm
 # Python depedencies
 apt-get install -y python-pip python-virtualenv
 python -m pip install --upgrade pip setuptools wheel
-pip install Adafruit_DHT
+#pip install Adafruit_DHT
 
 # Utilities
 apt-get install -y vim
