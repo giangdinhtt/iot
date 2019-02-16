@@ -1,6 +1,6 @@
 #!/bin/bash
 apt-get update
-apt-get upgrade
+apt-get -y upgrade
 
 apt-get install -y git
 git clone https://github.com/giangdinhtt/iot.git
