@@ -2,7 +2,7 @@
 apt-get update
 apt-get -y upgrade
 
-apt-get install -y git
+apt-get install -y chrony git vim
 git clone https://github.com/giangdinhtt/iot.git
 cd iot
 
@@ -31,7 +31,7 @@ python -m pip install --upgrade pip setuptools wheel
 #pip install Adafruit_DHT
 
 # Utilities
-apt-get install -y vim
+#apt-get install -y vim
 
 # Mosquitto
 apt-get install -y mosquitto mosquitto-clients
